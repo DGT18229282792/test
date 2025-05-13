@@ -1,11 +1,254 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Document</title>
+  <title>交错瀑布流</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #f5f5f5;
+      font-family: Arial, sans-serif;
+    }
+
+    /* 瀑布流容器 */
+    .waterfall {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      padding: 10px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* 瀑布流项目 */
+    .item {
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s;
+    }
+
+    /* 实现交错布局的关键 */
+    .item:nth-child(odd) {
+      transform: translateY(20px);
+    }
+
+    .item:hover {
+      transform: translateY(-2px);
+    }
+
+    .item img {
+      width: 100%;
+      height: auto;
+      display: block;
+      background: #eee;
+    }
+
+    .item-content {
+      padding: 12px;
+    }
+
+    /* 加载提示 */
+    .loading {
+      text-align: center;
+      padding: 20px;
+      display: none;
+    }
+
+    .loader {
+      width: 24px;
+      height: 24px;
+      border: 3px solid #ddd;
+      border-top-color: #666;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* 移动端适配 */
+    @media (max-width: 100px) {
+      .waterfall {
+        grid-template-columns: 1fr;
+      }
+
+      .item:nth-child(odd) {
+        transform: none;
+      }
+    }
+
+    .refresh-tip {
+      text-align: center;
+    }
+  </style>
 </head>
+
 <body>
-  这是内容
+  <div class="waterfall" id="waterfall"></div>
+  <div class="loading" id="loading">
+    <div class="loader"></div>
+  </div>
+
+  <script>
+    // 瀑布流控制器
+    const waterfall = {
+      // 初始化配置
+      config: {
+        pageSize: 10,          // 每页加载数量
+        minCardHeight: 200,    // 最小卡片高度
+        maxCardHeight: 500     // 最大卡片高度
+      },
+
+      // 状态管理
+      state: {
+        isLoading: false,
+        currentPage: 1
+      },
+
+      // 初始化
+      init() {
+        this.loadItems();
+        this.setupEventListeners();
+        this.setupPullToRefresh()
+      },
+
+      // 创建卡片元素
+      createCardItem(item) {
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.innerHTML = `
+                    <img src="${item.image}" alt="动态图片">
+                    <div class="item-content">
+                        <p>${item.text}</p>
+                    </div>
+                `;
+        return div;
+      },
+
+      // 生成测试数据
+      generateMockData(count) {
+        return Array.from({ length: count }, (_, i) => ({
+          id: Date.now() + i,
+          image: `https://picsum.photos/300/${Math.floor(
+            Math.random() * (this.config.maxCardHeight - this.config.minCardHeight)
+            + this.config.minCardHeight
+          )}?random=${i}`,
+          text: `动态内容 ${i + 1} - ${Math.random().toString(36).substr(2, 5)}`
+        }));
+      },
+
+      // 加载内容
+      async loadItems() {
+        if (this.state.isLoading) return;
+
+        this.state.isLoading = true;
+        document.getElementById('loading').style.display = 'block';
+
+        try {
+          // 模拟API请求
+          const mockData = await this.fetchData(this.config.pageSize);
+          const fragment = document.createDocumentFragment();
+
+          mockData.forEach(item => {
+            const card = this.createCardItem(item);
+            fragment.appendChild(card);
+          });
+
+          document.getElementById('waterfall').appendChild(fragment);
+          this.state.currentPage++;
+        } catch (error) {
+          console.error('加载失败:', error);
+        } finally {
+          this.state.isLoading = false;
+          document.getElementById('loading').style.display = 'none';
+        }
+      },
+
+      // 模拟数据请求
+      fetchData(count) {
+        return new Promise(resolve => {
+          setTimeout(() => {
+            resolve(this.generateMockData(count));
+          }, 800);
+        });
+      },
+
+      // 事件监听
+      setupEventListeners() {
+        // 滚动加载
+        window.addEventListener('scroll', () => {
+          const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
+          if (scrollTop + clientHeight >= scrollHeight - 500 && !this.state.isLoading) {
+            this.loadItems();
+          }
+        });
+
+        // 窗口调整
+        window.addEventListener('resize', () => {
+          // 移动端时自动移除交错效果
+          const items = document.querySelectorAll('.item');
+          if (window.innerWidth <= 100) {
+            items.forEach(item => item.style.transform = 'none');
+          } else {
+            items.forEach((item, index) => {
+              item.style.transform = index % 2 ? 'none' : 'translateY(20px)';
+            });
+          }
+        });
+      },
+      setupPullToRefresh() {
+        let startY = 0;
+        const refreshElement = document.createElement('div');
+        refreshElement.className = 'refresh-tip';
+        refreshElement.textContent = '松开刷新';
+        refreshElement.style.display = 'none'
+        document.body.prepend(refreshElement);
+
+        document.addEventListener('touchstart', e => {
+          startY = e.touches[0].pageY;
+       
+        }, { passive: true });
+
+        document.addEventListener('touchmove', e => {
+          const currentY = e.touches[0].pageY;
+          if (window.scrollY === 0 && currentY - startY > 80) {
+            refreshElement.style.top = '0';
+          }
+             refreshElement.style.display = 'block'
+        }, { passive: true });
+
+        document.addEventListener('touchend', () => {
+          if (parseInt(refreshElement.style.top) === 0) {
+            this.refreshContent();
+          }
+             refreshElement.style.display = 'none'
+          refreshElement.style.top = '-50px';
+        });
+      },
+
+      refreshContent() {
+        document.getElementById('waterfall').innerHTML = '';
+        this.state.currentPage = 1;
+        this.loadItems();
+      }
+
+    };
+
+    // 初始化瀑布流
+    waterfall.init();
+  </script>
 </body>
+
 </html>
