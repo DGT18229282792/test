@@ -92,6 +92,48 @@
     .refresh-tip {
       text-align: center;
     }
+
+    /* 新增视频相关样式 */
+    .video-wrapper {
+      position: relative;
+      cursor: pointer;
+      background: #000;
+    }
+
+    .video-play-icon {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 60px;
+      height: 60px;
+      background: rgba(0, 0, 0, 0.7);
+      border-radius: 50%;
+      transition: all 0.3s;
+      pointer-events: none;
+    }
+
+    .video-play-icon::before {
+      content: '';
+      position: absolute;
+      left: 53%;
+      top: 50%;
+      transform: translate(-40%, -50%);
+      border-style: solid;
+      border-width: 15px 0 15px 26px;
+      border-color: transparent transparent transparent #fff;
+    }
+
+    video {
+      width: 100%;
+      height: auto;
+      vertical-align: middle;
+    }
+
+    /* 隐藏默认控制条 */
+    video::-webkit-media-controls {
+      display: none !important;
+    }
   </style>
 </head>
 
@@ -128,27 +170,83 @@
       createCardItem(item) {
         const div = document.createElement('div');
         div.className = 'item';
-        div.innerHTML = `
+        if (item.type === 'video') {
+          div.innerHTML = `
+                        <div class="video-wrapper">
+                            <video 
+                                src="${item.videoUrl}" 
+                                poster="${item.image}" 
+                                preload="metadata"
+                                loop
+                            ></video>
+                            <div class="video-play-icon"></div>
+                        </div>
+                        <div class="item-content">
+                            <p>${item.text}</p>
+                        </div>
+                    `;
+        } else {
+          div.innerHTML = `
                     <img src="${item.image}" alt="动态图片">
                     <div class="item-content">
                         <p>${item.text}</p>
                     </div>
                 `;
+        }
+  // 添加视频点击事件
+                if (item.type === 'video') {
+                    const video = div.querySelector('video');
+                    const playIcon = div.querySelector('.video-play-icon');
+                    
+                    div.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        this.handleVideoPlay(video, playIcon);
+                    });
+
+                    // 视频状态变化监听
+                    video.addEventListener('play', () => {
+                        playIcon.style.opacity = '0';
+                    });
+
+                    video.addEventListener('pause', () => {
+                        playIcon.style.opacity = '1';
+                    });
+                }
         return div;
       },
 
       // 生成测试数据
       generateMockData(count) {
-        return Array.from({ length: count }, (_, i) => ({
-          id: Date.now() + i,
-          image: `https://picsum.photos/300/${Math.floor(
-            Math.random() * (this.config.maxCardHeight - this.config.minCardHeight)
-            + this.config.minCardHeight
-          )}?random=${i}`,
-          text: `动态内容 ${i + 1} - ${Math.random().toString(36).substr(2, 5)}`
-        }));
+       return Array.from({ length: count }, (_, i) => {
+                const isVideo = i === 0; // 第一个项目是视频
+                return {
+                    id: Date.now() + i,
+                    type: isVideo ? 'video' : 'image',
+                    image: `https://picsum.photos/300/200?random=${i}`,
+                    videoUrl: isVideo ? 'https://www.w3schools.com/html/mov_bbb.mp4' : '',
+                    text: `${isVideo ? '视频' : '图片'}内容 ${i + 1}`
+                };
+            });
       },
+         // 视频播放处理方法
+            handleVideoPlay(currentVideo, currentIcon) {
+                // 暂停其他正在播放的视频
+                document.querySelectorAll('video').forEach(video => {
+                    if (video !== currentVideo && !video.paused) {
+                        video.pause();
+                        video.parentElement.querySelector('.video-play-icon').style.opacity = '1';
+                    }
+                });
 
+                // 切换当前视频状态
+                if (currentVideo.paused) {
+                    currentVideo.play();
+                    currentIcon.style.opacity = '0';
+                } else {
+                    currentVideo.pause();
+                    currentIcon.style.opacity = '1';
+                }
+            },
       // 加载内容
       async loadItems() {
         if (this.state.isLoading) return;
@@ -159,6 +257,8 @@
         try {
           // 模拟API请求
           const mockData = await this.fetchData(this.config.pageSize);
+          console.log('mockData', mockData);
+          mockData[0].type = 'video'
           const fragment = document.createDocumentFragment();
 
           mockData.forEach(item => {
@@ -218,7 +318,7 @@
 
         document.addEventListener('touchstart', e => {
           startY = e.touches[0].pageY;
-       
+
         }, { passive: true });
 
         document.addEventListener('touchmove', e => {
@@ -226,14 +326,14 @@
           if (window.scrollY === 0 && currentY - startY > 80) {
             refreshElement.style.top = '0';
           }
-             refreshElement.style.display = 'block'
+          refreshElement.style.display = 'block'
         }, { passive: true });
 
         document.addEventListener('touchend', () => {
           if (parseInt(refreshElement.style.top) === 0) {
             this.refreshContent();
           }
-             refreshElement.style.display = 'none'
+          refreshElement.style.display = 'none'
           refreshElement.style.top = '-50px';
         });
       },
